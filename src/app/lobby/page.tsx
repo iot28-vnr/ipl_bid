@@ -17,6 +17,7 @@ import { createRoom, joinRoomSeat, startAuction } from "@/lib/roomsApi";
 import { generateRoomCode } from "@/lib/roomCode";
 import { useLocalStorageState } from "@/lib/useLocalStorage";
 import { formatLakhsCompact } from "@/lib/money";
+import { CSV_PLAYERS } from "@/data/playersFromCsv";
 
 const TEAMS: TeamId[] = ["CSK", "MI", "GT", "KKR", "LSG", "RCB", "RR", "DC", "SRH", "PBKS"];
 
@@ -96,16 +97,18 @@ export default function LobbyPage() {
       };
       setStoredSeat(seat);
 
-      // For now we create deck on the client from sample pool (deck stored in room doc).
-      // You can replace this with your CSV-deck later.
-      const { SAMPLE_PLAYERS } = await import("@/data/samplePlayers");
-      const deckFromMode = mode === "mega" ? SAMPLE_PLAYERS : SAMPLE_PLAYERS.slice(0, 20);
+      const MOCK_DECK_SIZE = 350;
+      const MEGA_DECK_SIZE = 230;
+      const deckPlayerIds = (mode === "mega"
+        ? CSV_PLAYERS.slice(0, MEGA_DECK_SIZE)
+        : CSV_PLAYERS.slice(0, MOCK_DECK_SIZE)
+      ).map((p) => p.id);
 
       await createRoom({
         roomCode: code,
         hostSeat: seat,
         mode,
-        deck: deckFromMode,
+        deckPlayerIds,
       });
 
       router.push(`/room/${code}`);

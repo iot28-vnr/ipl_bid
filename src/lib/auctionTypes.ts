@@ -40,7 +40,8 @@ export type RoomDoc = {
   phase: AuctionPhase;
 
   // Auction deck and progress
-  deck: AuctionPlayer[];
+  // Store only player IDs to keep room documents small.
+  deckPlayerIds: string[];
   currentDeckIndex: number;
 
   // Bidding

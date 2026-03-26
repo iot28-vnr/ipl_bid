@@ -10,10 +10,10 @@ import { getFirestoreInstance } from "./firebaseClient";
 import type {
   AuctionMode,
   AuctionPhase,
-  AuctionPlayer,
   RoomDoc,
   Seat,
 } from "./auctionTypes";
+import { getPlayerById } from "@/data/playersFromCsv";
 
 // NOTE: This file was introduced during MVP implementation.
 // To keep the clone moving, we store `timerEndAtMs` and other timestamps as numbers (client time model).
@@ -47,7 +47,7 @@ export async function createRoom(params: {
   roomCode: string;
   hostSeat: Seat;
   mode: AuctionMode;
-  deck: AuctionPlayer[];
+  deckPlayerIds: string[];
   defaultTimerSeconds?: number; // default 10
   resetSeconds?: number; // default 5
 }) {
@@ -55,7 +55,7 @@ export async function createRoom(params: {
     roomCode,
     hostSeat,
     mode,
-    deck,
+    deckPlayerIds,
     defaultTimerSeconds = 10,
     resetSeconds = 5,
   } = params;
@@ -68,10 +68,11 @@ export async function createRoom(params: {
     adminKey,
     mode,
     phase: "lobby",
-    deck,
+    deckPlayerIds,
     currentDeckIndex: 0,
 
-    highestBidLakhs: deck[0]?.basePriceLakhs ?? 0,
+    highestBidLakhs:
+      getPlayerById(deckPlayerIds[0] ?? "")?.basePriceLakhs ?? 0,
     highestBidderSeatId: null,
     timerEndAtMs: null,
     defaultTimerSeconds,
@@ -119,7 +120,8 @@ export async function startAuction(params: { roomCode: string; hostSeatId: strin
     if (data.phase !== "lobby") return;
 
     const now = Date.now();
-    const first = data.deck[0];
+    const firstPlayerId = data.deckPlayerIds[0] ?? "";
+    const first = getPlayerById(firstPlayerId);
     tx.update(room, {
       phase: "bidding" satisfies AuctionPhase,
       startedAtMs: now,
@@ -185,7 +187,7 @@ export async function finalizeCurrentPlayer(params: { roomCode: string }) {
 
     const roomData = roomSnap.data() as RoomDoc;
     if (roomData.phase !== "bidding") return;
-    if (roomData.currentDeckIndex >= roomData.deck.length) return;
+    if (roomData.currentDeckIndex >= roomData.deckPlayerIds.length) return;
 
     if (roomData.timerEndAtMs == null) return;
     const now = Date.now();
@@ -196,9 +198,12 @@ export async function finalizeCurrentPlayer(params: { roomCode: string }) {
       return;
     }
 
-    const currentPlayer = roomData.deck[roomData.currentDeckIndex];
+    const currentPlayerId = roomData.deckPlayerIds[roomData.currentDeckIndex];
+    const currentPlayer = getPlayerById(currentPlayerId);
     const winnerSeatId = roomData.highestBidderSeatId;
     const winnerBidLakhs = roomData.highestBidLakhs;
+
+    if (!currentPlayer) return;
 
     if (winnerSeatId) {
       const winnerSeat = seatRef(roomCode, winnerSeatId);
@@ -210,7 +215,7 @@ export async function finalizeCurrentPlayer(params: { roomCode: string }) {
         winnerData.totalBudgetLakhs - winnerData.spentBudgetLakhs;
 
       if (winnerBidLakhs <= remainingLakhs) {
-        const nextSquad = [...winnerData.squadPlayerIds, currentPlayer.id];
+        const nextSquad = [...winnerData.squadPlayerIds, currentPlayerId];
         tx.update(winnerSeat, {
           spentBudgetLakhs: winnerData.spentBudgetLakhs + winnerBidLakhs,
           squadPlayerIds: nextSquad,
@@ -220,7 +225,7 @@ export async function finalizeCurrentPlayer(params: { roomCode: string }) {
 
     // Advance deck
     const nextIndex = roomData.currentDeckIndex + 1;
-    if (nextIndex >= roomData.deck.length) {
+    if (nextIndex >= roomData.deckPlayerIds.length) {
       tx.update(room, {
         phase: "results" satisfies AuctionPhase,
         endedAtMs: now,
@@ -233,7 +238,9 @@ export async function finalizeCurrentPlayer(params: { roomCode: string }) {
       return;
     }
 
-    const nextPlayer = roomData.deck[nextIndex];
+    const nextPlayerId = roomData.deckPlayerIds[nextIndex] ?? "";
+    const nextPlayer = getPlayerById(nextPlayerId);
+    if (!nextPlayer) return;
     tx.update(room, {
       finalizedDeckIndex: roomData.currentDeckIndex,
       currentDeckIndex: nextIndex,

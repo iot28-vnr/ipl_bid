@@ -14,6 +14,7 @@ import type { AuctionPlayer, AuctionPhase, RoomDoc, Seat } from "@/lib/auctionTy
 import { finalizeCurrentPlayer, getStepForBid, placeBid, setPlayerRating } from "@/lib/roomsApi";
 import { useLocalStorageState } from "@/lib/useLocalStorage";
 import { formatLakhsCompact } from "@/lib/money";
+import { getPlayerById } from "@/data/playersFromCsv";
 
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -99,7 +100,8 @@ export default function RoomPage() {
   const currentPlayer: AuctionPlayer | null = useMemo(() => {
     if (!room) return null;
     const idx = room.currentDeckIndex;
-    return room.deck[idx] ?? null;
+    const playerId = room.deckPlayerIds[idx];
+    return playerId ? getPlayerById(playerId) ?? null : null;
   }, [room]);
 
   const phase: AuctionPhase | null = room?.phase ?? null;
